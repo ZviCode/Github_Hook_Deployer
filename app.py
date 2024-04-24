@@ -9,12 +9,16 @@ load_dotenv()
 app = Flask(__name__)
 
 list_last_actions_head_sha = []
-bot_telegram_token = os.getenv('BOT_TELEGRAM_TOKEN')
-id_telegram_for_log = os.getenv('ID_TELEGRAM_FOR_LOG')
+bot_telegram_token = os.getenv('BOT_TELEGRAM_TOKEN', '')
+id_telegram_for_log = os.getenv('ID_TELEGRAM_FOR_LOG', '')
 port = os.getenv('PORT')
 
 docker_compose_path = f'./docker-compose.yml'
-def send_message_telegram(message):
+
+def send_log(message):
+    if not bot_telegram_token or not id_telegram_for_log:
+        print(message)
+        return
     formatted_message = message.replace('_', '\\_')
     url = f'https://api.telegram.org/bot{bot_telegram_token}/sendMessage'
     params = {'chat_id': id_telegram_for_log, 'text': formatted_message, 'parse_mode': 'MarkdownV2'}
@@ -22,7 +26,7 @@ def send_message_telegram(message):
     return r.json()
     
 
-send_message_telegram(f'🚀 *Webhook server started* \n running on port {port}')
+send_log(f'🚀 *Webhook server started* \n running on port {port}')
 
 
 def get_container_id(name):
@@ -40,42 +44,42 @@ def valid_head_sha(head_sha, service_name):
     list_last_actions_head_sha.append(head_sha)
     if len(list_last_actions_head_sha) > 5:
         list_last_actions_head_sha.pop(0)
-    send_message_telegram(f"🔗 *New commit for {service_name}:* ```{head_sha}```")
+    send_log(f"🔗 *New commit for {service_name}:* ```{head_sha}```")
     return True
 
  
 def chack_docker_compose_file(service_name, docker_compose_path):
     if not os.path.exists(docker_compose_path):
-        send_message_telegram(f"⚠️ *No docker\-compose file found for {service_name}*")
+        send_log(f"⚠️ *No docker\-compose file found for {service_name}*")
         abort(400, 'Docker-compose file not found')
     with open(docker_compose_path, 'r') as file:
         for line in file:
             if service_name in line:
                 return True
-        send_message_telegram(f"⚠️ *No service found in docker\-compose file for {service_name}*")
+        send_log(f"⚠️ *No service found in docker\-compose file for {service_name}*")
         return False
 
 
 def update_docker_compose(service_name, docker_compose_path):
     try:
         subprocess.run(['git', '-C', f'./{service_name}', 'pull'], check=True)
-        send_message_telegram(f"🔄 *Successfully pulled {service_name}*")
+        send_log(f"🔄 *Successfully pulled {service_name}*")
         subprocess.run(['docker-compose', '-f', docker_compose_path, 'build', service_name], check=True)
-        send_message_telegram(f"🔨 *Successfully built {service_name}*")
+        send_log(f"🔨 *Successfully built {service_name}*")
         manage_docker_container(service_name)
         subprocess.run(['docker-compose', '-f', docker_compose_path, 'up', '-d', service_name], check=True)
-        send_message_telegram(f"🚀 *Successfully updated and scaled {service_name}*")
+        send_log(f"🚀 *Successfully updated and scaled {service_name}*")
     except subprocess.CalledProcessError as e:
-        send_message_telegram(f"⚠️ *Failed to update service {service_name}:* ```{e}```")
+        send_log(f"⚠️ *Failed to update service {service_name}:* ```{e}```")
         abort(500, f'Failed to update service {service_name}: {e}')
 
 def manage_docker_container(service_name):
     id_container = get_container_id(service_name)
     if id_container:
         subprocess.run(['docker', 'stop', id_container], check=True)
-        send_message_telegram(f"⏹️ *Successfully stopped {service_name}*")
+        send_log(f"⏹️ *Successfully stopped {service_name}*")
         subprocess.run(['docker', 'rm', id_container], check=True)
-        send_message_telegram(f"🗑️ *Successfully removed {service_name}*")
+        send_log(f"🗑️ *Successfully removed {service_name}*")
         
         
 @app.route('/webhook', methods=['POST'])

@@ -23,6 +23,9 @@ pip install -r requirements.txt
 * ```ID_TELEGRAM_FOR_LOG=your_telegram_id```
 * ```PORT=your_port```
 
+(If you do not add the telegram values, the logs will be printed to the terminal)
+
+
 5. run the project using python
 ```
 python app.py
