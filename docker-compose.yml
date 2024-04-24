@@ -1,0 +1,12 @@
+version: '3.7'
+
+services:
+
+  hello-world:
+    image: hello-world
+    ports:
+      - "8080:8080"
+    networks:
+      - my-network
+    volumes:
+      - ./hello-world:/app
