@@ -12,6 +12,8 @@ list_last_actions_head_sha = []
 bot_telegram_token = os.getenv('BOT_TELEGRAM_TOKEN', '')
 id_telegram_for_log = os.getenv('ID_TELEGRAM_FOR_LOG', '')
 port = os.getenv('PORT')
+list_branches = ['main', 'master']
+
 
 docker_compose_path = f'./docker-compose.yml'
 
@@ -88,6 +90,10 @@ def handle_webhook():
     action = data.get('action', 'undefined')
     head_sha = data.get('check_run', {}).get('head_sha')
     service_name = data['repository']['name']
+    head_branch = data['repository']['default_branch']
+    if head_branch not in list_branches:
+        send_log(f"⚠️ *Branch {head_branch} not in list of branches*")
+        return 'Webhook received and ignored', 200
     if chack_docker_compose_file(service_name, docker_compose_path):
         if action == 'completed':
             if valid_head_sha(head_sha, service_name):
