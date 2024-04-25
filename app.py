@@ -13,7 +13,8 @@ bot_telegram_token = os.getenv('BOT_TELEGRAM_TOKEN', '')
 id_telegram_for_log = os.getenv('ID_TELEGRAM_FOR_LOG', '')
 port = os.getenv('PORT')
 list_branches = ['main', 'master'] # Leave it blank for everyone to come up 
-
+check_run = True # If you want to check the status of the action
+push = True # If you want to check the status of the push
 
 docker_compose_path = f'./docker-compose.yml'
 
@@ -87,21 +88,32 @@ def manage_docker_container(service_name):
 @app.route('/webhook', methods=['POST'])
 def handle_webhook():
     data = request.get_json()
-    action = data.get('action', 'undefined')
-    head_sha = data.get('check_run', {}).get('head_sha')
-    service_name = data['repository']['name']
-    head_branch = data['repository']['default_branch']
-    if head_branch not in list_branches and list_branches:
-        send_log(f"⚠️ *Branch {head_branch} not in list of branches*")
+    if check_run:
+        action = data.get('action', 'undefined')
+        head_sha = data.get('check_run', {}).get('head_sha')
+        service_name = data['repository']['name']
+        head_branch = data['repository']['default_branch']
+        if head_branch not in list_branches and list_branches:
+            send_log(f"⚠️ *Branch {head_branch} not in list of branches*")
+            return 'Webhook received and ignored', 200
+        if chack_docker_compose_file(service_name, docker_compose_path):
+            if action == 'completed':
+                if valid_head_sha(head_sha, service_name):
+                    update_docker_compose(service_name, docker_compose_path)
+                return 'Webhook received and processed', 200
+            return 'Webhook received and processed', 200
         return 'Webhook received and ignored', 200
-    if chack_docker_compose_file(service_name, docker_compose_path):
-        if action == 'completed':
-            if valid_head_sha(head_sha, service_name):
+    if push:
+        head_branch =data['repository']['default_branch']
+        service_name = data['repository']['name']
+        if head_branch not in list_branches and list_branches:
+            send_log(f"⚠️ *Branch {head_branch} not in list of branches*")
+            return 'Webhook received and ignored', 200
+        if chack_docker_compose_file(service_name, docker_compose_path):
+            if valid_head_sha(data['after'], service_name):
                 update_docker_compose(service_name, docker_compose_path)
             return 'Webhook received and processed', 200
-        return 'Webhook received and processed', 200
-    return 'Webhook received and ignored', 200
-
+        return 'Webhook received and ignored', 200
 
 if __name__ == '__main__':
     app.run(debug=False, host='0.0.0.0', port=port)
