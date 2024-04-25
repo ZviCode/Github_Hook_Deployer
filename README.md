@@ -57,3 +57,12 @@ main :
 
 - - project
 - - project2
+
+
+#Errors:
+
+If you get an error like this every time,
+"detected dubious ownership in repository at"
+Consider running this script on a user who owns the git folder
+
+https://stackoverflow.com/questions/72978485/git-submodule-update-failed-with-fatal-detected-dubious-ownership-in-reposit

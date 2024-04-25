@@ -13,8 +13,8 @@ bot_telegram_token = os.getenv('BOT_TELEGRAM_TOKEN', '')
 id_telegram_for_log = os.getenv('ID_TELEGRAM_FOR_LOG', '')
 port = os.getenv('PORT')
 list_branches = ['main', 'master'] # Leave it blank for everyone to come up 
-check_run = True # If you want to check the status of the action
-push = True # If you want to check the status of the push
+list_repo_push = ['repo1', 'repo2'] # Leave it blank for everyone to come up
+list_repo_check_run = ['repo3', 'repo4'] # Leave it blank for everyone to come up
 
 docker_compose_path = f'./docker-compose.yml'
 
@@ -64,27 +64,33 @@ def chack_docker_compose_file(service_name, docker_compose_path):
 
 
 def update_docker_compose(service_name, docker_compose_path):
-    try:
         try:
-            result = subprocess.run(
-                ['git', '-C', service_name, 'pull'],
-                check=True,  # Raises CalledProcessError on non-zero exit
-                text=True,  # Return stdout and stderr as strings
-                capture_output=True  # Captures output for stdout and stderr
-            )
-            print("Success:", result.stdout)
+            subprocess.run(['git', '-C', service_name, 'pull'], check=True, text=True, capture_output=True )
+            send_log(f"🔄 *Successfully pulled {service_name}*")
         except subprocess.CalledProcessError as e:
-            print("Error:", e.stderr)
-        send_log(f"🔄 *Successfully pulled {service_name}*")
-        subprocess.run(['docker-compose', '-f', docker_compose_path, 'build', service_name], check=True)
-        send_log(f"🔨 *Successfully built {service_name}*")
+            error_message = e.stderr.strip()
+            send_log(f"⚠️ *Failed to git pull {service_name}:* \n```{error_message}```")
+            return abort(500, f'Failed to git pull {service_name}: {error_message}')
+        
+        try:
+            subprocess.run(['docker-compose', '-f', docker_compose_path, 'build', service_name], check=True)
+            send_log(f"🔨 *Successfully built {service_name}*")
+        except subprocess.CalledProcessError as e:
+            error_message = e.stderr.strip() 
+            send_log(f"⚠️ *Failed to build service {service_name}:* \n```{error_message}```")
+            abort(500, f'Failed to build service {service_name}: {error_message}')
+            
         manage_docker_container(service_name)
-        subprocess.run(['docker-compose', '-f', docker_compose_path, 'up', '-d', service_name], check=True)
-        send_log(f"🚀 *Successfully updated and scaled {service_name}*")
-    except subprocess.CalledProcessError as e:
-        send_log(f"⚠️ *Failed to update service {service_name}:* ```{e}```")
-        abort(500, f'Failed to update service {service_name}: {e}')
-
+        
+        try:
+            subprocess.run(['docker-compose', '-f', docker_compose_path, 'up', '-d', service_name], check=True, capture_output=True, text=True)
+            send_log(f"🚀 *Successfully updated and scaled {service_name}*")
+        except subprocess.CalledProcessError as e:
+            error_message = e.stderr.strip()  
+            send_log(f"⚠️ *Failed to update service {service_name}:* \n```{error_message}```")
+            abort(500, f'Failed to update service {service_name}: {error_message}')
+            
+    
 def manage_docker_container(service_name):
     id_container = get_container_id(service_name)
     if id_container:
@@ -93,11 +99,12 @@ def manage_docker_container(service_name):
         subprocess.run(['docker', 'rm', id_container], check=True)
         send_log(f"🗑️ *Successfully removed {service_name}*")
         
-        
-@app.route('/webhook', methods=['POST'])
-def handle_webhook():
-    data = request.get_json()
-    if check_run:
+def health_check_event(data):
+    service_name = data['repository']['name']
+    if list_repo_check_run and service_name not in list_repo_check_run:
+        send_log(f"⚠️ *Repository {service_name} not in list of repositories to check run*")
+        return 'Webhook received and ignored', 200
+    else:
         action = data.get('action', 'undefined')
         head_sha = data.get('check_run', {}).get('head_sha')
         service_name = data['repository']['name']
@@ -108,13 +115,19 @@ def handle_webhook():
         if chack_docker_compose_file(service_name, docker_compose_path):
             if action == 'completed':
                 if valid_head_sha(head_sha, service_name):
-                    update_docker_compose(service_name, docker_compose_path)
+                    re = update_docker_compose(service_name, docker_compose_path)
+                    if re: return re
                 return 'Webhook received and processed', 200
             return 'Webhook received and processed', 200
         return 'Webhook received and ignored', 200
-    if push:
+        
+def push_event(data):
+    service_name = data['repository']['name']
+    if list_repo_push or service_name not in list_repo_push:
+        send_log(f"⚠️ *Repository {service_name} not in list of repositories*")
+        return 'Webhook received and ignored', 200
+    else:
         head_branch =data['repository']['default_branch']
-        service_name = data['repository']['name']
         if head_branch not in list_branches and list_branches:
             send_log(f"⚠️ *Branch {head_branch} not in list of branches*")
             return 'Webhook received and ignored', 200
@@ -123,6 +136,20 @@ def handle_webhook():
                 update_docker_compose(service_name, docker_compose_path)
             return 'Webhook received and processed', 200
         return 'Webhook received and ignored', 200
+        
+@app.route('/webhook', methods=['POST'])
+def handle_webhook():
+    data = request.get_json()
+    git_event = request.headers.get('X-GitHub-Event')
+    if git_event == 'ping':
+        send_log(f"🏓 *Ping event received*")
+        return 'Webhook received and ignored', 200
+    if git_event == 'push':
+        return push_event(data)
+    if git_event == 'check_run':
+        return health_check_event(data)
+    else:
+        return 'Webhook received and ignored', 200        
 
 if __name__ == '__main__':
     app.run(debug=False, host='0.0.0.0', port=port)
