@@ -65,4 +65,10 @@ If you get an error like this every time,
 "detected dubious ownership in repository at"
 Consider running this script on a user who owns the git folder
 
-https://stackoverflow.com/questions/72978485/git-submodule-update-failed-with-fatal-detected-dubious-ownership-in-reposit
+It helped me
+https://stackoverflow.com/a/73018171/18590647
+
+If you have such an error message
+"could not read Username for 'https://github.com': No such device or address"
+It helped me
+https://stackoverflow.com/a/71984173/18590647
