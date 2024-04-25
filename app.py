@@ -65,7 +65,16 @@ def chack_docker_compose_file(service_name, docker_compose_path):
 
 def update_docker_compose(service_name, docker_compose_path):
     try:
-        subprocess.run(['git', '-C', f'./{service_name}', 'pull'], check=True)
+        try:
+            result = subprocess.run(
+                ['git', '-C', service_name, 'pull'],
+                check=True,  # Raises CalledProcessError on non-zero exit
+                text=True,  # Return stdout and stderr as strings
+                capture_output=True  # Captures output for stdout and stderr
+            )
+            print("Success:", result.stdout)
+        except subprocess.CalledProcessError as e:
+            print("Error:", e.stderr)
         send_log(f"🔄 *Successfully pulled {service_name}*")
         subprocess.run(['docker-compose', '-f', docker_compose_path, 'build', service_name], check=True)
         send_log(f"🔨 *Successfully built {service_name}*")
