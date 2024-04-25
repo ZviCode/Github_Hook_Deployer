@@ -101,15 +101,15 @@ def manage_docker_container(service_name):
         
 def health_check_event(data):
     service_name = data['repository']['name']
-    if list_repo_check_run and service_name not in list_repo_check_run:
+    if not list_repo_check_run or service_name not in list_repo_check_run:
         send_log(f"⚠️ *Repository {service_name} not in list of repositories to check run*")
         return 'Webhook received and ignored', 200
     else:
         action = data.get('action', 'undefined')
         head_sha = data.get('check_run', {}).get('head_sha')
         service_name = data['repository']['name']
-        head_branch = data['repository']['default_branch']
-        if head_branch not in list_branches and list_branches:
+        head_branch = data['repository']['default_branch']    
+        if head_branch not in list_branches and list_branches: 
             send_log(f"⚠️ *Branch {head_branch} not in list of branches*")
             return 'Webhook received and ignored', 200
         if chack_docker_compose_file(service_name, docker_compose_path):
@@ -123,7 +123,7 @@ def health_check_event(data):
         
 def push_event(data):
     service_name = data['repository']['name']
-    if list_repo_push or service_name not in list_repo_push:
+    if not list_repo_push or service_name not in list_repo_push:
         send_log(f"⚠️ *Repository {service_name} not in list of repositories*")
         return 'Webhook received and ignored', 200
     else:
