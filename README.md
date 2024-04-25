@@ -42,6 +42,13 @@ python app.py
 
 
 
+# It is very important!
+I set the variables above either on or off, to know what to track on GitHub
+
+check_run = True # if you want to check when the script github actions
+push = True # If you want to check the push status
+
+
 This is the folder tree that needs to be in your project for it to work
 ___________
 main :
